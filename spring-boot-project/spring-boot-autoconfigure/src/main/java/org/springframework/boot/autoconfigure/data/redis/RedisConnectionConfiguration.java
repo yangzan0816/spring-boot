@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties.Pool;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisNode;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisSentinelConfiguration;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -39,6 +41,9 @@ import org.springframework.util.StringUtils;
  * @author Scott Frederick
  */
 abstract class RedisConnectionConfiguration {
+
+	private static final boolean COMMONS_POOL2_AVAILABLE = ClassUtils.isPresent("org.apache.commons.pool2.ObjectPool",
+			RedisConnectionConfiguration.class.getClassLoader());
 
 	private final RedisProperties properties;
 
@@ -60,11 +65,13 @@ abstract class RedisConnectionConfiguration {
 			ConnectionInfo connectionInfo = parseUrl(this.properties.getUrl());
 			config.setHostName(connectionInfo.getHostName());
 			config.setPort(connectionInfo.getPort());
+			config.setUsername(connectionInfo.getUsername());
 			config.setPassword(RedisPassword.of(connectionInfo.getPassword()));
 		}
 		else {
 			config.setHostName(this.properties.getHost());
 			config.setPort(this.properties.getPort());
+			config.setUsername(this.properties.getUsername());
 			config.setPassword(RedisPassword.of(this.properties.getPassword()));
 		}
 		config.setDatabase(this.properties.getDatabase());
@@ -80,6 +87,7 @@ abstract class RedisConnectionConfiguration {
 			RedisSentinelConfiguration config = new RedisSentinelConfiguration();
 			config.master(sentinelProperties.getMaster());
 			config.setSentinels(createSentinels(sentinelProperties));
+			config.setUsername(this.properties.getUsername());
 			if (this.properties.getPassword() != null) {
 				config.setPassword(RedisPassword.of(this.properties.getPassword()));
 			}
@@ -108,6 +116,7 @@ abstract class RedisConnectionConfiguration {
 		if (clusterProperties.getMaxRedirects() != null) {
 			config.setMaxRedirects(clusterProperties.getMaxRedirects());
 		}
+		config.setUsername(this.properties.getUsername());
 		if (this.properties.getPassword() != null) {
 			config.setPassword(RedisPassword.of(this.properties.getPassword()));
 		}
@@ -116,6 +125,11 @@ abstract class RedisConnectionConfiguration {
 
 	protected final RedisProperties getProperties() {
 		return this.properties;
+	}
+
+	protected boolean isPoolEnabled(Pool pool) {
+		Boolean enabled = pool.getEnabled();
+		return (enabled != null) ? enabled : COMMONS_POOL2_AVAILABLE;
 	}
 
 	private List<RedisNode> createSentinels(RedisProperties.Sentinel sentinel) {
@@ -141,15 +155,20 @@ abstract class RedisConnectionConfiguration {
 				throw new RedisUrlSyntaxException(url);
 			}
 			boolean useSsl = ("rediss".equals(scheme));
+			String username = null;
 			String password = null;
 			if (uri.getUserInfo() != null) {
-				password = uri.getUserInfo();
-				int index = password.indexOf(':');
+				String candidate = uri.getUserInfo();
+				int index = candidate.indexOf(':');
 				if (index >= 0) {
-					password = password.substring(index + 1);
+					username = candidate.substring(0, index);
+					password = candidate.substring(index + 1);
+				}
+				else {
+					password = candidate;
 				}
 			}
-			return new ConnectionInfo(uri, useSsl, password);
+			return new ConnectionInfo(uri, useSsl, username, password);
 		}
 		catch (URISyntaxException ex) {
 			throw new RedisUrlSyntaxException(url, ex);
@@ -162,11 +181,14 @@ abstract class RedisConnectionConfiguration {
 
 		private final boolean useSsl;
 
+		private final String username;
+
 		private final String password;
 
-		ConnectionInfo(URI uri, boolean useSsl, String password) {
+		ConnectionInfo(URI uri, boolean useSsl, String username, String password) {
 			this.uri = uri;
 			this.useSsl = useSsl;
+			this.username = username;
 			this.password = password;
 		}
 
@@ -180,6 +202,10 @@ abstract class RedisConnectionConfiguration {
 
 		int getPort() {
 			return this.uri.getPort();
+		}
+
+		String getUsername() {
+			return this.username;
 		}
 
 		String getPassword() {

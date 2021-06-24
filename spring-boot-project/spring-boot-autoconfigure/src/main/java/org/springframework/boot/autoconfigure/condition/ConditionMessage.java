@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,17 +296,17 @@ public final class ConditionMessage {
 		 * @return a built {@link ConditionMessage}
 		 */
 		public ConditionMessage because(String reason) {
-			if (StringUtils.isEmpty(reason)) {
-				return new ConditionMessage(ConditionMessage.this, this.condition);
+			if (StringUtils.hasLength(reason)) {
+				return new ConditionMessage(ConditionMessage.this,
+						StringUtils.hasLength(this.condition) ? this.condition + " " + reason : reason);
 			}
-			return new ConditionMessage(ConditionMessage.this,
-					StringUtils.isEmpty(this.condition) ? reason : this.condition + " " + reason);
+			return new ConditionMessage(ConditionMessage.this, this.condition);
 		}
 
 	}
 
 	/**
-	 * Builder used to create a {@link ItemsBuilder} for a condition.
+	 * Builder used to create an {@link ItemsBuilder} for a condition.
 	 */
 	public final class ItemsBuilder {
 
@@ -401,23 +401,28 @@ public final class ConditionMessage {
 	 */
 	public enum Style {
 
+		/**
+		 * Render with normal styling.
+		 */
 		NORMAL {
+
 			@Override
 			protected Object applyToItem(Object item) {
 				return item;
 			}
 
-			@Override
-			public Collection<?> applyTo(Collection<?> items) {
-				return items;
-			}
 		},
 
+		/**
+		 * Render with the item surrounded by quotes.
+		 */
 		QUOTE {
+
 			@Override
 			protected String applyToItem(Object item) {
 				return (item != null) ? "'" + item + "'" : null;
 			}
+
 		};
 
 		public Collection<?> applyTo(Collection<?> items) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Supplier;
-import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -127,7 +126,9 @@ public class JarFile extends AbstractJarFile implements Iterable<java.util.jar.J
 	private JarFile(RandomAccessDataFile rootFile, String pathFromRoot, RandomAccessData data, JarEntryFilter filter,
 			JarFileType type, Supplier<Manifest> manifestSupplier) throws IOException {
 		super(rootFile.getFile());
-		super.close();
+		if (System.getSecurityManager() == null) {
+			super.close();
+		}
 		this.rootFile = rootFile;
 		this.pathFromRoot = pathFromRoot;
 		CentralDirectoryParser parser = new CentralDirectoryParser();
@@ -138,7 +139,12 @@ public class JarFile extends AbstractJarFile implements Iterable<java.util.jar.J
 			this.data = parser.parse(data, filter == null);
 		}
 		catch (RuntimeException ex) {
-			close();
+			try {
+				this.rootFile.close();
+				super.close();
+			}
+			catch (IOException ioex) {
+			}
 			throw ex;
 		}
 		this.manifestSupplier = (manifestSupplier != null) ? manifestSupplier : () -> {
@@ -338,10 +344,11 @@ public class JarFile extends AbstractJarFile implements Iterable<java.util.jar.J
 		if (this.closed) {
 			return;
 		}
-		this.closed = true;
+		super.close();
 		if (this.type == JarFileType.DIRECT) {
 			this.rootFile.close();
 		}
+		this.closed = true;
 	}
 
 	private void ensureOpen() {
@@ -385,30 +392,12 @@ public class JarFile extends AbstractJarFile implements Iterable<java.util.jar.J
 		return this.signed;
 	}
 
-	void setupEntryCertificates(JarEntry entry) {
-		// Fallback to JarInputStream to obtain certificates, not fast but hopefully not
-		// happening that often.
+	JarEntryCertification getCertification(JarEntry entry) {
 		try {
-			try (JarInputStream inputStream = new JarInputStream(getData().getInputStream())) {
-				java.util.jar.JarEntry certEntry = inputStream.getNextJarEntry();
-				while (certEntry != null) {
-					inputStream.closeEntry();
-					if (entry.getName().equals(certEntry.getName())) {
-						setCertificates(entry, certEntry);
-					}
-					setCertificates(getJarEntry(certEntry.getName()), certEntry);
-					certEntry = inputStream.getNextJarEntry();
-				}
-			}
+			return this.entries.getCertification(entry);
 		}
 		catch (IOException ex) {
 			throw new IllegalStateException(ex);
-		}
-	}
-
-	private void setCertificates(JarEntry entry, java.util.jar.JarEntry certEntry) {
-		if (entry != null) {
-			entry.setCertificates(certEntry);
 		}
 	}
 
@@ -430,9 +419,10 @@ public class JarFile extends AbstractJarFile implements Iterable<java.util.jar.J
 	 * {@link URLStreamHandler} will be located to deal with jar URLs.
 	 */
 	public static void registerUrlProtocolHandler() {
+		Handler.captureJarContextUrl();
 		String handlers = System.getProperty(PROTOCOL_HANDLER, "");
 		System.setProperty(PROTOCOL_HANDLER,
-				("".equals(handlers) ? HANDLERS_PACKAGE : handlers + "|" + HANDLERS_PACKAGE));
+				((handlers == null || handlers.isEmpty()) ? HANDLERS_PACKAGE : handlers + "|" + HANDLERS_PACKAGE));
 		resetCachedUrlHandlers();
 	}
 

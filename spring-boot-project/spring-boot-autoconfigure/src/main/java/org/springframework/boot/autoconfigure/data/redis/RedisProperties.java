@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,11 @@ public class RedisProperties {
 	private String host = "localhost";
 
 	/**
+	 * Login username of the redis server.
+	 */
+	private String username;
+
+	/**
 	 * Login password of the redis server.
 	 */
 	private String password;
@@ -67,9 +72,14 @@ public class RedisProperties {
 	private boolean ssl;
 
 	/**
-	 * Connection timeout.
+	 * Read timeout.
 	 */
 	private Duration timeout;
+
+	/**
+	 * Connection timeout.
+	 */
+	private Duration connectTimeout;
 
 	/**
 	 * Client name to be set on connections with CLIENT SETNAME.
@@ -113,6 +123,14 @@ public class RedisProperties {
 		this.host = host;
 	}
 
+	public String getUsername() {
+		return this.username;
+	}
+
+	public void setUsername(String username) {
+		this.username = username;
+	}
+
 	public String getPassword() {
 		return this.password;
 	}
@@ -143,6 +161,14 @@ public class RedisProperties {
 
 	public Duration getTimeout() {
 		return this.timeout;
+	}
+
+	public Duration getConnectTimeout() {
+		return this.connectTimeout;
+	}
+
+	public void setConnectTimeout(Duration connectTimeout) {
+		this.connectTimeout = connectTimeout;
 	}
 
 	public String getClientName() {
@@ -208,6 +234,12 @@ public class RedisProperties {
 	public static class Pool {
 
 		/**
+		 * Whether to enable the pool. Enabled automatically if "commons-pool2" is
+		 * available.
+		 */
+		private Boolean enabled;
+
+		/**
 		 * Maximum number of "idle" connections in the pool. Use a negative value to
 		 * indicate an unlimited number of idle connections.
 		 */
@@ -238,6 +270,14 @@ public class RedisProperties {
 		 * object evictor thread starts, otherwise no idle object eviction is performed.
 		 */
 		private Duration timeBetweenEvictionRuns;
+
+		public Boolean getEnabled() {
+			return this.enabled;
+		}
+
+		public void setEnabled(Boolean enabled) {
+			this.enabled = enabled;
+		}
 
 		public int getMaxIdle() {
 			return this.maxIdle;
@@ -370,14 +410,10 @@ public class RedisProperties {
 		/**
 		 * Jedis pool configuration.
 		 */
-		private Pool pool;
+		private final Pool pool = new Pool();
 
 		public Pool getPool() {
 			return this.pool;
-		}
-
-		public void setPool(Pool pool) {
-			this.pool = pool;
 		}
 
 	}
@@ -395,7 +431,7 @@ public class RedisProperties {
 		/**
 		 * Lettuce pool configuration.
 		 */
-		private Pool pool;
+		private final Pool pool = new Pool();
 
 		private final Cluster cluster = new Cluster();
 
@@ -409,10 +445,6 @@ public class RedisProperties {
 
 		public Pool getPool() {
 			return this.pool;
-		}
-
-		public void setPool(Pool pool) {
-			this.pool = pool;
 		}
 
 		public Cluster getCluster() {

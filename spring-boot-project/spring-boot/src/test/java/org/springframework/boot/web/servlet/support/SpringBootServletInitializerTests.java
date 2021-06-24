@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
+import org.springframework.boot.context.logging.LoggingApplicationListener;
 import org.springframework.boot.testsupport.system.CapturedOutput;
 import org.springframework.boot.testsupport.system.OutputCaptureExtension;
 import org.springframework.boot.web.embedded.undertow.UndertowServletWebServerFactory;
@@ -47,6 +48,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.core.Ordered;
 import org.springframework.core.env.PropertySource;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.web.context.WebApplicationContext;
@@ -112,8 +114,10 @@ class SpringBootServletInitializerTests {
 	}
 
 	@Test
-	void shutdownHookIsNotRegistered() {
-		new WithConfigurationAnnotation().createRootApplicationContext(this.servletContext);
+	void shutdownHooksAreNotRegistered() throws ServletException {
+		new WithConfigurationAnnotation().onStartup(this.servletContext);
+		assertThat(this.servletContext.getAttribute(LoggingApplicationListener.REGISTER_SHUTDOWN_HOOK_PROPERTY))
+				.isEqualTo(false);
 		assertThat(this.application).hasFieldOrPropertyWithValue("registerShutdownHook", false);
 	}
 
@@ -123,6 +127,27 @@ class SpringBootServletInitializerTests {
 			try (AbstractApplicationContext context = (AbstractApplicationContext) new WithErrorPageFilterNotRegistered()
 					.createRootApplicationContext(servletContext)) {
 				assertThat(context.getBeansOfType(ErrorPageFilter.class)).hasSize(0);
+			}
+		});
+		try {
+			webServer.start();
+		}
+		finally {
+			webServer.stop();
+		}
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	void errorPageFilterIsRegisteredWithNearHighestPrecedence() {
+		WebServer webServer = new UndertowServletWebServerFactory(0).getWebServer((servletContext) -> {
+			try (AbstractApplicationContext context = (AbstractApplicationContext) new WithErrorPageFilter()
+					.createRootApplicationContext(servletContext)) {
+				Map<String, FilterRegistrationBean> registrations = context
+						.getBeansOfType(FilterRegistrationBean.class);
+				assertThat(registrations).hasSize(1);
+				FilterRegistrationBean errorPageFilterRegistration = registrations.get("errorPageFilterRegistration");
+				assertThat(errorPageFilterRegistration.getOrder()).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 1);
 			}
 		});
 		try {

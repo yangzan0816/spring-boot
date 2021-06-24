@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,13 +43,16 @@ class ConfigDataPropertiesTests {
 
 	private static final Profiles NULL_PROFILES = null;
 
-	private static final List<String> NO_IMPORTS = Collections.emptyList();
+	private static final List<ConfigDataLocation> NO_IMPORTS = Collections.emptyList();
 
 	@Test
 	void getImportsReturnsImports() {
-		List<String> imports = Arrays.asList("one", "two", "three");
+		ConfigDataLocation l1 = ConfigDataLocation.of("one");
+		ConfigDataLocation l2 = ConfigDataLocation.of("two");
+		ConfigDataLocation l3 = ConfigDataLocation.of("three");
+		List<ConfigDataLocation> imports = Arrays.asList(l1, l2, l3);
 		ConfigDataProperties properties = new ConfigDataProperties(imports, null);
-		assertThat(properties.getImports()).containsExactly("one", "two", "three");
+		assertThat(properties.getImports()).containsExactly(l1, l2, l3);
 	}
 
 	@Test
@@ -157,15 +160,37 @@ class ConfigDataPropertiesTests {
 	@Test
 	void isActiveAgainstBoundData() {
 		MapConfigurationPropertySource source = new MapConfigurationPropertySource();
-		source.put("spring.config.import", "one,two,three");
 		source.put("spring.config.activate.on-cloud-platform", "kubernetes");
-		source.put("spring.config.activate.on-profiles", "a | b");
+		source.put("spring.config.activate.on-profile", "a | b");
 		Binder binder = new Binder(source);
 		ConfigDataProperties properties = ConfigDataProperties.get(binder);
 		ConfigDataActivationContext context = new ConfigDataActivationContext(CloudPlatform.KUBERNETES,
 				createTestProfiles());
-		assertThat(properties.getImports()).containsExactly("one", "two", "three");
 		assertThat(properties.isActive(context)).isTrue();
+	}
+
+	@Test
+	void isActiveAgainstBoundDataWhenProfilesDontMatch() {
+		MapConfigurationPropertySource source = new MapConfigurationPropertySource();
+		source.put("spring.config.activate.on-cloud-platform", "kubernetes");
+		source.put("spring.config.activate.on-profile", "x | z");
+		Binder binder = new Binder(source);
+		ConfigDataProperties properties = ConfigDataProperties.get(binder);
+		ConfigDataActivationContext context = new ConfigDataActivationContext(CloudPlatform.KUBERNETES,
+				createTestProfiles());
+		assertThat(properties.isActive(context)).isFalse();
+	}
+
+	@Test
+	void isActiveAgainstBoundDataWhenCloudPlatformDoesntMatch() {
+		MapConfigurationPropertySource source = new MapConfigurationPropertySource();
+		source.put("spring.config.activate.on-cloud-platform", "cloud-foundry");
+		source.put("spring.config.activate.on-profile", "a | b");
+		Binder binder = new Binder(source);
+		ConfigDataProperties properties = ConfigDataProperties.get(binder);
+		ConfigDataActivationContext context = new ConfigDataActivationContext(CloudPlatform.KUBERNETES,
+				createTestProfiles());
+		assertThat(properties.isActive(context)).isFalse();
 	}
 
 	@Test
@@ -195,7 +220,7 @@ class ConfigDataPropertiesTests {
 		source.put("spring.config.import", "one,two,three");
 		Binder binder = new Binder(source);
 		ConfigDataProperties properties = ConfigDataProperties.get(binder);
-		assertThat(properties.getImportOrigin("two"))
+		assertThat(properties.getImports().get(1).getOrigin())
 				.hasToString("\"spring.config.import\" from property source \"source\"");
 	}
 
@@ -207,7 +232,7 @@ class ConfigDataPropertiesTests {
 		source.put("spring.config.import[2]", "three");
 		Binder binder = new Binder(source);
 		ConfigDataProperties properties = ConfigDataProperties.get(binder);
-		assertThat(properties.getImportOrigin("two"))
+		assertThat(properties.getImports().get(1).getOrigin())
 				.hasToString("\"spring.config.import[1]\" from property source \"source\"");
 	}
 

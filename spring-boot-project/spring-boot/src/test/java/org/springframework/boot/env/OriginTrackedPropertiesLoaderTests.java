@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.springframework.boot.env;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.OriginTrackedPropertiesLoader.Document;
 import org.springframework.boot.origin.OriginTrackedValue;
 import org.springframework.boot.origin.TextResourceOrigin;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.PropertiesLoaderUtils;
 
@@ -88,7 +90,7 @@ class OriginTrackedPropertiesLoaderTests {
 	}
 
 	@Test
-	void getMalformedUnicodeProperty() throws Exception {
+	void getMalformedUnicodeProperty() {
 		// gh-12716
 		ClassPathResource resource = new ClassPathResource("test-properties-malformed-unicode.properties", getClass());
 		assertThatIllegalStateException().isThrownBy(() -> new OriginTrackedPropertiesLoader(resource).load())
@@ -181,6 +183,34 @@ class OriginTrackedPropertiesLoaderTests {
 	}
 
 	@Test
+	void loadWhenMultiDocumentWithoutWhitespaceLoadsMultiDoc() throws IOException {
+		String content = "a=a\n#---\nb=b";
+		List<Document> loaded = new OriginTrackedPropertiesLoader(new ByteArrayResource(content.getBytes())).load();
+		assertThat(loaded).hasSize(2);
+	}
+
+	@Test
+	void loadWhenMultiDocumentWithLeadingWhitespaceLoadsSingleDoc() throws IOException {
+		String content = "a=a\n \t#---\nb=b";
+		List<Document> loaded = new OriginTrackedPropertiesLoader(new ByteArrayResource(content.getBytes())).load();
+		assertThat(loaded).hasSize(1);
+	}
+
+	@Test
+	void loadWhenMultiDocumentWithTrailingWhitespaceLoadsMultiDoc() throws IOException {
+		String content = "a=a\n#--- \t \nb=b";
+		List<Document> loaded = new OriginTrackedPropertiesLoader(new ByteArrayResource(content.getBytes())).load();
+		assertThat(loaded).hasSize(2);
+	}
+
+	@Test
+	void loadWhenMultiDocumentWithTrailingCharsLoadsSingleDoc() throws IOException {
+		String content = "a=a\n#--- \tcomment\nb=b";
+		List<Document> loaded = new OriginTrackedPropertiesLoader(new ByteArrayResource(content.getBytes())).load();
+		assertThat(loaded).hasSize(1);
+	}
+
+	@Test
 	void getPropertyWithWhitespaceAfterKey() {
 		OriginTrackedValue value = getFromFirst("bar");
 		assertThat(getValue(value)).isEqualTo("foo=baz");
@@ -254,6 +284,19 @@ class OriginTrackedPropertiesLoaderTests {
 	void getPropertyWithEscapedTrailingSpace() {
 		OriginTrackedValue value = getFromFirst("test-with-escaped-trailing-space");
 		assertThat(getValue(value)).isEqualTo("trailing ");
+	}
+
+	@Test
+	void existingCommentsAreNotTreatedAsMultiDoc() throws Exception {
+		this.resource = new ClassPathResource("existing-non-multi-document.properties", getClass());
+		this.documents = new OriginTrackedPropertiesLoader(this.resource).load();
+		assertThat(this.documents.size()).isEqualTo(1);
+	}
+
+	@Test
+	void getPropertyAfterPoundCharacter() {
+		OriginTrackedValue value = getFromFirst("test-line-after-empty-pound");
+		assertThat(getValue(value)).isEqualTo("abc");
 	}
 
 	private OriginTrackedValue getFromFirst(String key) {

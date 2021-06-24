@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,9 @@ class KotlinPluginAction implements PluginApplicationAction {
 
 	@Override
 	public void execute(Project project) {
-		String kotlinVersion = project.getPlugins().getPlugin(KotlinPluginWrapper.class).getKotlinPluginVersion();
 		ExtraPropertiesExtension extraProperties = project.getExtensions().getExtraProperties();
 		if (!extraProperties.has("kotlin.version")) {
+			String kotlinVersion = project.getPlugins().getPlugin(KotlinPluginWrapper.class).getKotlinPluginVersion();
 			extraProperties.set("kotlin.version", kotlinVersion);
 		}
 		enableJavaParametersOption(project);
@@ -47,15 +47,8 @@ class KotlinPluginAction implements PluginApplicationAction {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
 	public Class<? extends Plugin<? extends Project>> getPluginClass() {
-		try {
-			return (Class<? extends Plugin<? extends Project>>) Class
-					.forName("org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper");
-		}
-		catch (Throwable ex) {
-			return null;
-		}
+		return KotlinPluginWrapper.class;
 	}
 
 }
